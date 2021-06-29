@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<search> 
+  
+  
+    
+    <entry>
+      <title></title>
+      <link href="/2021/test/"/>
+      <url>/2021/test/</url>
+      
+        <content type="html"><![CDATA[<p>Hexo++测试<br><img src="https://cdn.jsdelivr.net/gh/lixiang810/fk-gfw@master/hpp/1614301702000.webp" class="lazyload" data-srcset="https://cdn.jsdelivr.net/gh/lixiang810/fk-gfw@master/hpp/1614301702000.webp" srcset="data:image/png;base64,666"></p>]]></content>
+      
+      
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>模块化你的GraphQL Schema代码</title>
+      <link href="/2021/graphql/"/>
+      <url>/2021/graphql/</url>
+      
+        <content type="html"><![CDATA[<p>随着 GraphQL 应用程序从演示、概念验证到生产的发展，Schema 和 resolver 的复杂性也会随之增长。为了组织代码，我们可能需要将 schema type 和相关的 resolver 分割成多个文件。<span id="more"></span></p><p>我们经常收到这样的问题，因为有很多不同的方法来拆分 schema 代码，而且也许看起来你需要复杂的设置来获得好的结果。但事实证明，只需要几个简单的 JavaScript 概念，就可以将 schema 和 resolver 代码分离到单独的文件中。</p><p>在这篇文章中，我们介绍了一种直接的方法，对用 <code>graphql-tools</code>构建的 schema 进行模块化，你可以进行调整，以适应自己的喜好和代码库的风格。</p><h2 id="Schema"><a href="#Schema" class="headerlink" title="Schema"></a>Schema</h2><p>如果你刚刚起步，并且在一个文件中定义了你的整个Schema，它可能看起来很像下面的片段。在这里，我们称它为<code>schema.js</code>。</p><pre><code class="js">// schema.jsconst typeDefs = `  type Query &#123;    author(id: Int!): Post    book(id: Int!): Post  &#125;    type Author &#123;    id: Int!    firstName: String    lastName: String    books: [Book]  &#125;    type Book &#123;    title: String    author: Author  &#125;`;makeExecutableSchema(&#123;  typeDefs: typeDefs,  resolvers: &#123;&#125;,&#125;);</code></pre><p>理想情况下，我们不想把所有的东西都放在一个schema定义字符串里，而想把<code>Author</code>和<code>Book</code>的schema类型分别放在名为<code>author.js</code>和<code>book.js</code>的文件中。</p><p>我们在Schema定义语言（SDL）中编写的schema定义只是字符串。对它们，我们有一个简单的方法来导入不同文件中的类型定义——把字符串分割成多个字符串，之后进行组合。这是<code>author.js</code>在进行上述处理后应该的样子：</p><pre><code class="js">// author.jsexport const typeDef = `  type Author &#123;    id: Int!    firstName: String    lastName: String    books: [Book]  &#125;`;</code></pre><p>而<code>book.js</code>应该是这样：</p><pre><code class="js">// author.jsexport const typeDef = `  type Author &#123;    id: Int!    firstName: String    lastName: String    books: [Book]  &#125;`;</code></pre><p>最后，我们在<code>schema.js</code>中把它们整合起来：</p><pre><code class="js">// schema.jsimport &#123; typeDef as Author &#125; from &#39;./author.js&#39;;import &#123; typeDef as Book &#125; from &#39;./book.js&#39;;const Query = `  type Query &#123;    author(id: Int!): Post    book(id: Int!): Post  &#125;`;makeExecutableSchema(&#123;  typeDefs: [ Query, Author, Book ],  resolvers: &#123;&#125;,&#125;);</code></pre><p>我们在这里并没有做任何花哨的事情：我们只是导入恰好包含SDL的字符串。请注意，为了方便，你不需要自己组合字符串——<code>makeExecutableSchema</code>实际上可以直接接受一个类型定义的数组，以适应这种方法。</p><h2 id="Resolvers"><a href="#Resolvers" class="headerlink" title="Resolvers"></a>Resolvers</h2><p>现在，我们已经有办法将 schema 分解成各个部分，但我们还希望能够将每个 resolver 与对应 schema 相关的部分一起移动。一般来说，我们会需要把某个 schama 的 resolver 与该 schema 的模式定义保存在同一个文件中。</p><p>在上一个例子的基础上进行扩展，这是我们的<code>schema.js</code>文件，其中增加了一些resolver。</p><pre><code class="js">// schema.jsimport &#123; typeDef as Author &#125; from &#39;./author.js&#39;;import &#123; typeDef as Book &#125; from &#39;./book.js&#39;;const Query = `  type Query &#123;    author(id: Int!): Post    book(id: Int!): Post  &#125;`;const resolvers = &#123;  Query: &#123;    author: () =&gt; &#123; ... &#125;,    book: () =&gt; &#123; ... &#125;,  &#125;,  Author: &#123;    name: () =&gt; &#123; ... &#125;,  &#125;,  Book: &#123;    title: () =&gt; &#123; ... &#125;,  &#125;,&#125;;makeExecutableSchema(&#123;  typeDefs: [ Query, Author, Book ],  resolvers,&#125;);</code></pre><p>就像拆分schema定义字符串一样，我们也可以拆分<code>resolvers</code>对象。我们可以把其中的一部分放在<code>author.js</code>中，另一部分放在<code>book.js</code>中，然后导入它们，并使用<code>lodash.merge</code>函数把它们在<code>schema.js</code>中进行组合。</p><p>这是<code>author.js</code>会变成的样子：</p><pre><code class="js">// author.jsexport const typeDef = `  type Author &#123;    id: Int!    firstName: String    lastName: String    books: [Book]  &#125;`;export const resolvers = &#123;  Author: &#123;    books: () =&gt; &#123; ... &#125;,  &#125;&#125;;</code></pre><p>而<code>book.js</code>应该变成这样：</p><pre><code class="js">// book.jsexport const typeDef = `  type Book &#123;    title: String    author: Author  &#125;`;export const resolvers = &#123;  Book: &#123;    author: () =&gt; &#123; ... &#125;,  &#125;&#125;;</code></pre><p>然后，在<code>schema.js</code>中用<code>lodash.merge</code>把它们组合在一起：</p><pre><code class="js">import &#123; merge &#125; from &#39;lodash&#39;;import &#123;   typeDef as Author,   resolvers as authorResolvers,&#125; from &#39;./author.js&#39;;import &#123;   typeDef as Book,   resolvers as bookResolvers,&#125; from &#39;./book.js&#39;;const Query = `  type Query &#123;    author(id: Int!): Author    book(id: Int!): Book  &#125;`;const resolvers = &#123;  Query: &#123;     ...,  &#125;&#125;;makeExecutableSchema(&#123;  typeDefs: [ Query, Author, Book ],  resolvers: merge(resolvers, authorResolvers, bookResolvers),&#125;);</code></pre><p>这样重构以后的结构与我们一开始的<code>resolvers</code>结构是完全等价的。</p><h2 id="扩展类型"><a href="#扩展类型" class="headerlink" title="扩展类型"></a>扩展类型</h2><p>我们仍然在<code>schema.js</code>中把<code>authors</code>和<code>books</code>定义为<code>Query</code>上的顶层字段，然而，这些字段在逻辑上是与<code>Author</code>和<code>Book</code>联系在一起的，它们应该被放在<code>author.js</code>和<code>book.js</code>中。</p><p>为了达到这个目的，我们可以使用类型扩展。我们可以这样定义现有的<code>Query</code>类型：</p><pre><code class="js">const Query = `  type Query &#123;    _empty: String  &#125;    extend type Query &#123;    author(id: Int!): Author   &#125;    extend type Query &#123;    book(id: Int!): Book   &#125;`;</code></pre><blockquote><p>注意：在当前版本的GraphQL中不能使用空类型，即使你打算在程序的其余部分扩展它。所以我们需要确保原来的Query类型至少有一个字段——在这种情况下，我们可以添加一个假的<code>_empty</code>字段。在未来的GraphQL版本中，我们也许可以使用空类型，然后在程序的其余部分进行扩展。</p></blockquote><p>基本上，<code>extend</code>关键字让我们可以为已经定义的类型添加字段。我们可以使用这个关键字在<code>book.js</code>和<code>author.js</code>中定义与这些类型相关的<code>Query</code>字段。然后我们还应该在同一个地方为这些类型定义<code>Query resolver</code>。</p><p>下面是这样以后<code>author.js</code>的样子：</p><pre><code class="js">// author.jsexport const typeDef = `  extend type Query &#123;    author(id: Int!): Author  &#125;      type Author &#123;    id: Int!    firstName: String    lastName: String    books: [Book]  &#125;`;export const resolvers = &#123;  Query: &#123;    author: () =&gt; &#123; ... &#125;,  &#125;,  Author: &#123;    books: () =&gt; &#123; ... &#125;,  &#125;&#125;;</code></pre><p>这是<code>book.js</code>的样子：</p><pre><code class="js">// book.jsexport const typeDef = `  extend type Query &#123;    book(id: Int!): Book  &#125;    type Book &#123;    title: String    author: Author  &#125;`;export const resolvers = &#123;  Query: &#123;    book: () =&gt; &#123; ... &#125;,  &#125;,  Book: &#123;    author: () =&gt; &#123; ... &#125;,  &#125;&#125;;</code></pre><p>我们在<code>schema.js</code>中把它们组合到一起，就像前面那样：</p><pre><code class="js">import &#123; merge &#125; from &#39;lodash&#39;;import &#123;   typeDef as Author,   resolvers as authorResolvers,&#125; from &#39;./author.js&#39;;import &#123;   typeDef as Book,   resolvers as bookResolvers,&#125; from &#39;./book.js&#39;; // If you had Query fields not associated with a// specific type you could put them hereconst Query = `  type Query &#123;    _empty: String  &#125;`;const resolvers = &#123;&#125;;makeExecutableSchema(&#123;  typeDefs: [ Query, Author, Book ],  resolvers: merge(resolvers, authorResolvers, bookResolvers),&#125;);</code></pre><p>现在，schema和resolver的定义与相关类型终于被放在一起了。</p><h2 id="最后的建议"><a href="#最后的建议" class="headerlink" title="最后的建议"></a>最后的建议</h2><p>我们刚刚经历了服务器代码模块化的机制。这里有一些额外的提示，可能会对你了解如何划分代码库有所帮助：</p><ol><li>在学习、原型设计甚至构建POC时，将你的整个schema放在一个文件中可能是不错的。这样做的好处是可以快速浏览整个schema，或者向同事解释。  </li><li>你可以按照功能来组织你的schema和resolver：例如，把与结账系统有关的东西放在一起，在电子商务网站中可能是有意义的。  </li><li>将resolver与相关的schema定义保存在同一个文件中。这将使你能够有效地对你的代码进行管理。  </li><li>使用<a href="https://github.com/apollographql/graphql-tag">graphql-tag</a>将你的SDL类型定义用<code>gql</code>标签包装起来。如果你的编辑器使用GraphQL Plugin或Prettier对代码进行格式化，只要在SDL的前缀加上gql标签，编辑器中就能有对应的语法高亮。  </li></ol>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 教程 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>如何编译Mozilla Firefox</title>
+      <link href="/2021/firefox/"/>
+      <url>/2021/firefox/</url>
+      
+        <content type="html"><![CDATA[<p>如何编译Mozilla Firefox</p><span id="more"></span><p>文章大部翻译改编自：</p><p><a href="https://firefox-source-docs.mozilla.org/contributing/contribution_quickref.html">https://firefox-source-docs.mozilla.org/contributing/contribution_quickref.html</a></p><p><a href="https://davidwalsh.name/how-to-build-firefox">https://davidwalsh.name/how-to-build-firefox</a></p><p>这个过程中的某些部分，包括clone和编译，即使在现代硬件上也会花费很长的时间。如果遇到困难，任何时候都不要犹豫，去<a href="https://chat.mozilla.org/">https://chat.mozilla.org</a>的#introduction 频道问出来。当然，你得<strong>懂英文</strong>。</p><p>使用的大部分软件仓库都由Mozilla管理（并且没有镜像源），尽管并非完全无法访问，中国大陆用户依旧可能需要一定的网络加速服务及镜像源，在此简单介绍一下。</p><h3 id="Linux用户"><a href="#Linux用户" class="headerlink" title="Linux用户"></a>Linux用户</h3><p>代理软件：cgproxy+任何socks5/http代理均可。cgproxy使用方法请自行查找GitHub同名项目，当然，得<strong>懂英文</strong>。</p><p>镜像源：除了Linux发行版软件源以外，编译过程中还会用到pip的软件源，因此请逐一设置好镜像源。镜像源的作用是加速安装编译依赖的过程，而并不能对其余大多数过程起加速作用。</p><p>除了Debian系和RedHat系以外的发行版应该也能进行编译，比如我的Archlinux就成功搞定了全过程。尽管如此，我推荐新人使用Ubuntu或其衍生版（kubuntu等）</p><h2 id="clone源码"><a href="#clone源码" class="headerlink" title="clone源码"></a>clone源码</h2><p>首先你需要安装Mercurial，canonical编写的版本管理系统。安装方式视你的发行版而定，对archlinux用户而言应该是这样：</p><pre><code class="bash">sudo pacman -S mercurial</code></pre><p>其实用Git也可以，但我懒得写了。人家这么推荐就这么用吧。</p><p>然后</p><pre><code class="bash">hg clone https://hg.mozilla.org/mozilla-central/</code></pre><p>克隆可能需要10分钟到几个小时（取决于你的连接速度），clone下来的仓库应该小于5GB，但构建后可能会占用约20GB的空间，请先确保你有这个空间。我在2021年1月2日编译后占用的大小是20.4GB。除此以外，编译器等编译依赖也需要一定的空间，因此30GB的剩余空间会是一个比较保险的条件。</p><h2 id="安装依赖（Linux-Mac）"><a href="#安装依赖（Linux-Mac）" class="headerlink" title="安装依赖（Linux/Mac）"></a>安装依赖（Linux/Mac）</h2><pre><code class="bash">cd mozilla-central./mash bootstrap</code></pre><p>推荐使用默认选项（也就是一路回车）。</p><h2 id="安装依赖（Windows）"><a href="#安装依赖（Windows）" class="headerlink" title="安装依赖（Windows）"></a>安装依赖（Windows）</h2><ol><li>你需要64位的Windows7或更新的系统。</li><li>下载并安装<a href="https://visualstudio.microsoft.com/downloads/">Visual Studio Community Edition</a>。</li><li>下载<a href="https://ftp.mozilla.org/pub/mozilla.org/mozilla/libraries/win32/MozillaBuildSetup-Latest.exe">MozillaBuild</a>。默认安装目录是<code>C:\mozilla-build</code></li><li>进行下一步操作前，请确保你完成了<a href="https://firefox-source-docs.mozilla.org/setup/windows_build.html#building-firefox-on-windows">这些要求</a>（比这篇教程还长了，不翻译）。</li></ol><p>此后的命令你需要在mozilla-build环境里执行，也就是打开<code>C:\mozilla-build\start-shell.bat</code>再在里面输命令。</p><h2 id="使用预编译组件以加速编译"><a href="#使用预编译组件以加速编译" class="headerlink" title="使用预编译组件以加速编译"></a>使用预编译组件以加速编译</h2><p>如果你不打算对Firefox的C++或Rust部分进行开发，那么你可以采用如下步骤以大大缩短时间（前提是你有网络加速服务）：</p><ol><li>用顺手的编辑器在<code>mozilla-central</code>目录下新建<code>mozconfig</code>文件。</li><li>输入如下内容</li></ol><pre><code class="makefile"># 自动下载编译好的C++组件:ac_add_options --enable-artifact-builds# 将组件放进一个文件夹:mk_add_options MOZ_OBJDIR=./objdir-frontend</code></pre><h2 id="编译与运行"><a href="#编译与运行" class="headerlink" title="编译与运行"></a>编译与运行</h2><p>当你完成了上述步骤，用如下命令来检查依赖关系并开始编译。这将需要一段时间：从几分钟到几个小时不等，取决于你的配置和网速。</p><pre><code class="bash">./mach build</code></pre><p>这以后，用这个命令来运行你编译好的Firefox：</p><pre><code class="bash">./mach run</code></pre><p>大功告成。</p><h2 id="我的编译用时"><a href="#我的编译用时" class="headerlink" title="我的编译用时"></a>我的编译用时</h2><p>先说说我的电脑配置：</p><pre><code>ROG玩家国度 魔霸新锐CPU：Intel i7-10875HGPU：NVIDIA RTX2060RAM：16GB操作系统：Archlinux桌面环境：KDE Plasma测试时间：2021年1月2日</code></pre><p>内存占用最高达8G，全新编译用时17分34秒。</p>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 教程 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>帝国主义化的互联网——互联网产出萎缩的根本原因</title>
+      <link href="/2020/imperialism/"/>
+      <url>/2020/imperialism/</url>
+      
+        <content type="html"><![CDATA[<blockquote><p>本文备份自豆瓣（原文已被仅个人可见）</p></blockquote><span id="more"></span><p>　　先来道开胃菜：论坛与微博的差别<br>　　现存网络社区基本分为两种形式：论坛与微博。<br>　　论坛里，用户开出一个帖子，然后其它用户在这个帖子下进行公共讨论。在这种形式下，内容与用户的关系并不如微博那样紧密。因此，我们说：论坛，是面向观点的社区系统，更偏重观点本身而非观点的发布者。<br>　　与之相对地，微博系统，其实就是增加了转发、点赞与关注功能，并将内容本身弱化的博客系统。在一个典型的微博中，用户关注一个博主，然后再接收该博主的内容推送。在“现代化”的微博系统中，运营方还将使用算法推送其它博主的内容，但用户关注始终是重要推送判据、始终是微博展现内容的主要成分。因此，我们可以说，微博，是面向人的社区系统，更偏重观点的发布者而非观点本身。<br>　　这些东西，这篇文章应该讲得比我清楚很多，最好直接阅读它，而不是就听我只言片语：<br>　　<a href="https://blog.bgme.me/posts/my-understanding-of-microblogging">《我对微博客的理解》 by 无影人</a><br>　　那么我进入正题：我们的言论自由，以及言论自由的推广，或者说，我们的数据权利，为什么不能得到保障？为什么中文“互联网”，甚至世界互联网的产出都在萎缩？<br>　　知乎有个问题：<a href="https://www.zhihu.com/question/49684783/answer/1094448439">中文互联网的产出在渐渐枯萎吗？</a><br>　　答案们普遍都只能看到表象，只能看到言论管控、限流、平台争斗，却没有看清楚背后的本质，即“互联网”与互联网均已进入垄断阶段，或者说，帝国主义阶段。<br>　　稍有“互联网”经验的人都清楚，在绝大多数时候，所谓的用户，对其产出的内容，都没有所有权，因为平台方掌握、控制了一切。在现代的平台-用户框架以内，内容一经用户发布，用户就失去了对其产出的最高权限，而只保留“经审查的修改”等少部分权限，与之相对地，平台对内容可以说有最高权限，包括但不限于引流、限流、删除、修改、再分发。比如中国互联网时代前中期，B站用户为B站产出了大量内容，而在2018年8月开始的风暴中，这些内容被悉数削除或限流。前些日子，百度贴吧突然不允许访问2017年以前的内容，而百度贴吧有价值内容产出的黄金时期却正好就在2017年以前。对于这些内容，百度说屏蔽就屏蔽，说不放出来就不放出来，甚至至今对前因后果语焉不详。无数经典就此毁于一旦。<br>　　对于用户的数据权利，唯有欧盟的《通用数据保护条例》（GDPR）能提供差强人意的保护，其声明了许多我们可以说是闻所未闻的数据权利，包括但不限于访问权、更正权，尤其是可携权，即：用户在需要时，有将自己产生的数据取出并转移的权利。可以说，不是《通用技术保护条例》，我甚至不知道我可以有这些权利。<br>　　而<em>某些国家</em>通过一部类似GDPR的法律的可能性近乎为零。强有力的中后期资产阶级专政，不会允许资产阶级的权利受侵犯。资产阶级法权同样渗透在互联网的相关法规中：事实上，它只保护平台占有数据的权利，却不保护用户占有数据或浏览数据的权利。特别地，在<em>某些国家</em>言论管控的大背景下，官僚垄断资产阶级与互联网垄断资产阶级有意无意地结成罪恶的同盟：互联网资本家们负责纵横捭阖、以经济手段挤垮小平台，将流量集中在几个寡头身上，垄断用户与数据；官僚资本家们负责翻云覆雨、以行政手段关停小平台，将流量集中在几个寡头身上，让寡头垄断用户与数据。<br>　　对于千方百计垄断下来的用户与数据，官僚资本家和互联网资本家们各自有各自的用法：官僚资本家利用垄断得来的用户与数据辅助资产阶级专政，而互联网资本家们则利用垄断得来的用户与数据为自己谋取利润，无论是谁，都不可能对数据，抑或用户，有些许的“尊重”。<br>　　对官僚资本家来说，被垄断的用户与数据，能极大便利化网络审查，加强资产阶级专政。打个比方：以前为了封锁一条消息，需要审查 100 家以上的分散的论坛，而现在只需要在微博微信等垄断性平台部署审查系统就可以将大量消息几乎堵死。2018 年，官僚资本家们突然要求论坛全部实行实名制，直接导致了境内一众小论坛的迁移甚至关停，也直接造成了中文互联网“户籍满天飞”的现状。<br>　　而互联网寡头们之间也存在一定的竞争，在种种因素的要求下，他们纷纷开始水平整合、垂直整合，大搞名为“生态链”的康采恩甚至托拉斯，画地为牢，宰割山河，互联网或者“互联网”这个概念已近摆设，取而代之的是一个个厂商自己的圈子，它们不对外开放，也不对通用搜索引擎开放——搜索引擎也被整合进了“生态链”中，成为专用搜索引擎，生态链的一环。举个例子，百度会在搜索结果里优先推荐自己的“百家号”，而微信公众号内容不可被微信以外的搜索引擎检索。又比如，Android 系统的主题、字体、图标本来是通用的，华为小米等公司的 Launcher （可以理解为手机桌面）却不允许应用第三方主题、字体和图标，只允许用户使用自家主题商店上面的主题。这当然可以解释为“方便收费，方便回馈作者”，然而 Google Play 上也同样有大量收费主题，只是不像华为小米主题商店上面的主题那样只能给自家手机用。当然可以再狡辩说“厂商对 Launcher 有修改，第三方主题无法应用”，但图标呢？字体呢？圈起地了就是圈起地了，不开放就是不开放，任何借口都不能掩饰互联网垄断公司们宰割山河、圈住用户的欲望。他们力图让用户的所有需求都在自己的“生态链”里解决，从而获取比对手更大的竞争优势。<br>　　从以上几点，我们不难得出结论：互联网的垄断组织已经形成并确立，我们可以说，互联网与“互联网”，已经进入了垄断资本主义时代，也即帝国主义时代。高强度的审查、对流量的争夺、用户权利的损害、平台的膨胀，所有的一切，都是这个帝国主义阶段的副产物。<br>　　曾经以便于转发著称的微信、曾经大大提升了信息传播便利性的微博，现在都因为这落后的生产关系而走到了它们的反面：曾经便于转发的微信现在不停地禁止转发、曾经提升了信息传播便利性的微博现在在以限流和撤热搜等手段阻碍信息传播。这样的现象就是异化。我在别的地方说过，现阶段的生产关系压根配不上互联网这样的生产力。于是旧的生产关系会扼杀、会异化先进的生产力，在以前是封建生产关系抑制工业生产力，在这里是资本主义生产关系阻挠互联网生产力。工业党们那形而上学的生产力-生产关系观，在这里，不攻自破。</p>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 随想 </tag>
+            
+            <tag> 分析 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>Hexo-theme-Sakura折腾日记（1）</title>
+      <link href="/2020/Sakura/"/>
+      <url>/2020/Sakura/</url>
+      
+        <content type="html"><![CDATA[<p>　　如何获得一个匿名免翻墙评论区？</p><span id="more"></span><p><a href="https://lixiang810.github.io/">我的solo博客</a> <a href="https://lixiang3.imfast.io/">我的hexo博客</a>  </p><h1 id="为什么要魔改-Sakura"><a href="#为什么要魔改-Sakura" class="headerlink" title="为什么要魔改 Sakura"></a>为什么要魔改 Sakura</h1><p>　　实名与匿名是一种抉择。让利维坦手中握住更多的信息也许能带给大多数人安全，却同样会伤害异见者。而事实证明，异见者并不总是出于恶意动机。何况“对事不对人”“针对观点而非质疑动机”也是公共说理的基本素养。然而，有一些国家的政府却不允许任何匿名性的存在，无论是纸质出版的匿名性还是网络的匿名性。<br>　　近年来，在这些国家中的一个国家，新兴的垄断巨头与政府相勾结，垄断巨头负责挤垮小平台进而集中用户（这个过程是自由资本主义转为垄断资本主义，也即帝国主义的必然），而政府则可以方便地对这些已经自愿或<code>因大多数人的自愿而</code>被迫集中起来的人进行集中管理（这却是偶然——法德等大多数西欧国家是反例）。该国网络的匿名程度很低，然而，网络犯罪却不见得因此减少：巨头和政府有办法拿到公民的个人信息，另一些个人就有办法从巨头和手里把它们购买或盗窃出来。恶俗维基的存在以及恶俗维基上面满天飞舞的户籍就是证明——小如未成年人大如刘慈欣，只要把自己的信息交予利维坦，就不要指望别人不知道，特别是在这单凭手机号就足够把人翻个底朝天的时代。刘慈欣的小号被发现，就是从其绑定的手机号着手，发掘出了支付宝号、身份证号等信息，从而让恶俗人士一步步锁定目标。<br>　　这一点上， Sakura 采用的 Valine 评论系统令我胆战心惊：部署 Valine 的后端，竟需要进行身份证实名认证！作为亲眼目睹公权力对本人学校里异见者迫害，甚至自己也险遭卷入的人，毫无疑问地，我很害怕。万一哪天我心血来潮作了死（如“不存在的人”、“不存在的人”和“不存在的人”），或者无意之间说了一些不能说的东西（李医生等人就是例子），那岂不是训诫往上起步？虽然公权力找到我的身份易如反掌，但我不想主动投怀送抱。万一触怒了恶俗系的残留势力，那岂不是全家户籍都要被挂出去？虽然有心者还是可以从这个博客里找到我真人的蛛丝马迹，但我不希望他们只花5块钱查个社工库就做得到。  </p><h1 id="为什么使用-gitalk"><a href="#为什么使用-gitalk" class="headerlink" title="为什么使用 gitalk"></a>为什么使用 gitalk</h1><p>　　毫无疑问地，拒绝追踪的评论系统在这个国家已经死绝了。如果没有，那么也不是我能找到的。于是我首先考虑了 <code>disqus</code> 。然后我发现它的服务器被墙了。囧rz。<br>　　最后我选择了 gitalk ，它是一个利用 github issues 作为后端的评论系统。 <code>Hexo-theme-Nexmoe</code> 有自带，但我更喜欢 <code>Sakura</code> ，然而 <code>Sakura</code> 目前仅支持 <code>gitalk</code> 。<br>　　使用 gitalk ，是因为 github 短期内不会被墙。作为全世界最大开源平台，并且有微软这样与<code>这国家</code>合作的公司的加持， github 被墙的可能性不能说没有，但短期内我们仍可拥有“依附的自由”。<br>　　于是我开始了魔改。  </p><h1 id="尝试与失败过程"><a href="#尝试与失败过程" class="headerlink" title="尝试与失败过程"></a>尝试与失败过程</h1><p>　　先咕着。（屑颜）  </p><h1 id="最终进行的修改"><a href="#最终进行的修改" class="headerlink" title="最终进行的修改"></a>最终进行的修改</h1><p>　　先装 gitalk （不确定这一步是否必须）  </p><pre><code class="bash">$ npm install gitalk --save</code></pre><p>　　然后修改themes/Sakura/layout/_partial/comments.ejs，以下是修改后的文本：  </p><pre><code class="js">&lt;!--这一堆是原内容，我全部注释了&lt;% if (theme.valine &amp;&amp; post.comments) &#123; %&gt;&lt;div id=&quot;vcomments&quot;&gt;&lt;/div&gt;&lt;script&gt;  window.onload = function()&#123;      var valine = new Valine();      valine.init(&#123;        el: &#39;#vcomments&#39;,        appId: &quot;&lt;%= theme.v_appId %&gt;&quot;,        appKey: &quot;&lt;%= theme.v_appKey %&gt;&quot;,        path: window.location.pathname,        placeholder: &quot;你是我一生只会遇见一次的惊喜 ...&quot;      &#125;)  &#125;&lt;/script&gt;&lt;% &#125; %&gt;--&gt;&lt;!--以下是正文，懒得改别处，就把原来的if照搬了过来--&gt;&lt;% if (theme.valine &amp;&amp; post.comments) &#123; %&gt;&lt;link rel=&quot;stylesheet&quot; href=&quot;https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.css&quot;&gt;&lt;div id=&quot;gitalk&quot;&gt;&lt;/div&gt;&lt;script src=&quot;https://cdn.jsdelivr.net/npm/gitalk@1/dist/gitalk.min.js&quot;&gt;&lt;/script&gt;&lt;script src=&quot;https://cdn.jsdelivr.net/npm/blueimp-md5@2.12.0/js/md5.min.js&quot;&gt;&lt;/script&gt;&lt;script type=&quot;text/javascript&quot;&gt;    var gitalk = new Gitalk(&#123;        clientID: &#39;&lt;%= theme.gitalk.clientID %&gt;&#39;,        clientSecret: &#39;&lt;%= theme.gitalk.clientSecret %&gt;&#39;,        id: md5(location.pathname),        repo: &#39;&lt;%= theme.gitalk.repo %&gt;&#39;,        owner: &#39;&lt;%= theme.gitalk.owner %&gt;&#39;,        admin: &#39;&lt;%= theme.gitalk.admin %&gt;&#39;    &#125;)    gitalk.render(&#39;gitalk&#39;)&lt;/script&gt;&lt;% &#125; %&gt;</code></pre><p>　　最后修改themes/Sakura/_config.yml：  </p><pre><code class="yaml"># Valinevaline: true#v_appId: #############v_appKey: ############gitalk:  admin: 我的名字 # 拥有对该repo进行操作的 GitHub username  owner: 我的名字 # 持有该 repo 的 GitHub username  repo: 我的 repo # 存放评论的 issue 所在的 repo  clientID: 我的 Client ID # GitHub Client ID  clientSecret: 我的 Secret # GitHub Client Secret</code></pre><p>　　保存。  </p><pre><code class="bash">$ hexo clean#以下两条命令默认你是把你的hexo托管在github上：$ git commit -a$ git push</code></pre><p>　　然后你就拥有了一个 gitalk 匿名评论区。虽说也得注册账号，但只需要程序员们人人都有的 github 账号就可以了。<br>　　这些方法对于防止公权力的滥用来说是远远不够的，因为你总得在公权力的眼皮子底下传播你的链接。如果你搞的事儿足够大，他们不需要在墙外解决问题，只需要在墙内溯源第一个发布链接的人就行。<br>　　但是，这个办法可以稍微提高一点追踪成本，也能让被公权力以及<code>被天天作死的你整得</code>神经过敏的境内私人服务提供商稍微松口气，还能让你的评论区不由境内私人服务提供商进行过分严格的审核，何乐而不为呢？  </p><blockquote><p>黎想<br>2020年6月13日于家中  </p></blockquote>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 教程 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>2018荣耀magicbook锐龙版archlinux卡死解决方案</title>
+      <link href="/2020/Magicbook/"/>
+      <url>/2020/Magicbook/</url>
+      
+        <content type="html"><![CDATA[<p>我的2018款魔法书锐龙版对linux的兼容性极差。  </p><span id="more"></span><ol><li>deepin v15（注：2018款魔法书均预装windows，2019才有deepin pro）直接调不了背光。</li><li>opensuse tumbleweed运行中卡死，只能强制重启。</li><li>ubuntu同上。</li><li>kde neon、kubuntu、manjaro、archlinux同上。</li></ol><p>　　最近才在华为论坛上找到办法，作者则是在<a href="https://wiki.archlinux.org/index.php/AMDGPU#Enable_Southern_Islands_(SI)_and_Sea_Islands_(CIK)_support">archwiki</a>上看到的。不过作者打字水平不太好，文内有多处错误，我搞了之后大致如下：<br><em>/etc/mkinitcpio.conf</em></p><pre><code>……MODULES=(amdgpu radeon)……</code></pre><p>　　据wiki说在modules里面<strong>按顺序</strong>填上amdgpu radeon即可解决。不过在此之前我按华为论坛上作者的办法（只填amdgpu）问题依旧。我如此修改以后问题出现的频率有所减少，但依旧存在。<br>　　同时，通过经验我还发现，电脑卡死的现象与过热存在一定的相关性。因此，我安装了<a href="https://wiki.archlinux.org/index.php/TLP_(%E7%AE%80%E4%BD%93%E4%B8%AD%E6%96%87)">tlp</a>和tlpui-git（为tlp开发的一个GUI），并将各项设置调为“优先节能（power）”，目前过热的现象大大减少，卡死的现象暂未出现。(在此以后卡死现象依旧存在——5.16修订)<br>　　不过我觉得大概还是治标不治本。这篇文章会经常更新。  </p><blockquote><p>修订于2020年5月15日  </p></blockquote><p>　　经过多方查找如<a href="https://bugzilla.redhat.com/show_bug.cgi?id=1562530#c66">bugzilla</a>、<a href="https://forum.manjaro.org/t/amd-ryzen-problems-and-fixes/55533">manjaro forum</a>，我决定：</p><ul><li>修改内核参数  </li></ul><p><em>/etc/default/grub</em></p><pre><code>……GRUB_CMDLINE_LINUX_DEFAULT=&quot;quiet splash ……&quot;改为“noacpi nosplash idle=nomwait irqpoll ……”……</code></pre><p>然后<code>sudo grub-mkconfig -o /boot/grub/grub.cfg</code></p><ul><li>禁用C6状态  </li></ul><pre><code class="bash">$ yay zenstates-git# vim /etc/modules-load.d/modules.conf（可能是新文件）加入如下单词：“msr”。# vim /etc/systemd/system/disable_c6.service （新文件）</code></pre><p>内容如下：</p><pre><code>[Unit]Description=Ryzen Disable C6DefaultDependencies=noAfter=sysinit.target local-fs.targetBefore=basic.target[Service]Type=oneshotExecStart=/usr/bin/zenstates --c6-disable[Install]WantedBy=basic.target</code></pre><p>　　然后</p><pre><code># systemctl enable disable_c6.service</code></pre><p>　　最后重启。<br>　　这是我病急乱投医综合三四个回答的结果。修改后，目前暂时一切正常。  </p><blockquote><p>修订于2020年5月16日</p></blockquote><p>　　然而并没有。<br>　　于是我把kde的混成器设置从OpenGL3.1改成了2.0，现在暂时没事了。<br>　　然后还有吧友提供了<a href="https://tieba.baidu.com/p/6686363600">另一个方案</a><br>　　（/etc/default/grub）：  </p><pre><code>acpi_osi=\&quot;Windows 2015\&quot; reboot=kbd ivrs_ioapic[32]=00:14.0 amd_iommu=on idle=nomwait amdgpu.vm_fragment_size=9 initrd=/boot/amd-ucode.img</code></pre><p>　　然后<code>sudo grub-mkconfig -o /boot/grub/grub.cfg</code> </p><blockquote><p>修订于2020年5月26日</p></blockquote><p>　　然而还是有问题！！！！！！！</p><p>　　然后我又找到了一个内核参数，使用方法同上，加入 <code>/etc/default/grub</code>里然后 <code>grub-mkconfig -o /boot/grub/grub.cfg</code>吧：</p><p><code>amdgpu.noretry=0</code></p><blockquote><p>修订于 2020 年 5 月 27 日  </p></blockquote><p>　　目前问题再未复现。可认为已经得到彻底解决。加上笔记本即将卖出，本文宣布完结。<br>　　几个关键点：  </p><ol><li>设置 idle=nomwait 或禁用 C6 。  </li><li>将混成器由 OpenGL3.1 改为 2.0。  </li></ol><blockquote><p>修订于 2020 年 6 月 12 日</p></blockquote>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 教程 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>如何在15分钟内开起自己的博客</title>
+      <link href="/2020/%E5%A6%82%E4%BD%95%E5%9C%A815%E5%88%86%E9%92%9F%E5%86%85%E5%BC%80%E8%B5%B7%E8%87%AA%E5%B7%B1%E7%9A%84%E5%8D%9A%E5%AE%A2/"/>
+      <url>/2020/%E5%A6%82%E4%BD%95%E5%9C%A815%E5%88%86%E9%92%9F%E5%86%85%E5%BC%80%E8%B5%B7%E8%87%AA%E5%B7%B1%E7%9A%84%E5%8D%9A%E5%AE%A2/</url>
+      
+        <content type="html"><![CDATA[<p>1、找Hexo主题，丢上Github仓库1。<br>2.1（二选一之一）、生成RSA公私钥对，私钥放仓库1 Secrets。新建仓库2，命名为用户名.github.io。公钥放仓库2 Deploy Key。<br>2.2、配置config.yml，使用现成Github Action“Hexo Deploy”。<br>2.3、完成。</p><hr><p>3.1（二选一之二）、使用netlify，使用github账户登录，导入仓库1.<br>3.2、完成。</p><hr><p>4.1、其实也可以两个都搞。</p>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 教程 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+    
+    <entry>
+      <title>第一篇文章</title>
+      <link href="/2020/%E7%AC%AC%E4%B8%80%E7%AF%87/"/>
+      <url>/2020/%E7%AC%AC%E4%B8%80%E7%AF%87/</url>
+      
+        <content type="html"><![CDATA[<p>那么这里就是黎想的第114514个博客了。</p><p>感谢<strong>github</strong>，它让我能获取代码<br>感谢<strong>Netlify</strong>，它帮助部署网站<br>感谢<strong>Hexo-Themes-Sakura</strong>还有<strong>Hexo</strong>。</p><p>以及Richard Matthew Stallman等等为自由软件运动或开源软件运动奋斗的人们</p>]]></content>
+      
+      
+      
+        <tags>
+            
+            <tag> 通知类及其它 </tag>
+            
+        </tags>
+      
+    </entry>
+    
+    
+  
+  
+</search>
